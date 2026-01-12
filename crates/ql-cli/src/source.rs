@@ -3,8 +3,8 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ql_adapters::{adapter_for_path, adapters};
-use ql_ast::{walk_source, TableBatch};
+use ql_adapters::adapter_for_path;
+use ql_ast::{second_pass, walk_source, TableBatch};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,9 +131,7 @@ pub fn collect_source_batch(root: &Path) -> Result<TableBatch, String> {
         batch.extend(file_batch);
     }
     write_cache(root, &next_cache);
-    for adapter in adapters() {
-        adapter.second_pass(&mut batch, root);
-    }
+    second_pass(&mut batch);
     Ok(batch)
 }
 

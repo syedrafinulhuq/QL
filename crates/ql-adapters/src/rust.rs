@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ql_ast::{
     CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
 };
@@ -158,6 +156,28 @@ impl RustAdapter {
         });
     }
 
+    fn map_impl_item(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
+        let Some(target_node) = node.child_by_field_name("type") else { return };
+        let Ok(target_name) = target_node.utf8_text(source.as_bytes()) else { return };
+        let Some(trait_node) = node.child_by_field_name("trait") else { return };
+        let Ok(trait_name) = trait_node.utf8_text(source.as_bytes()) else { return };
+
+        let target_name = simplify_type_name(target_name);
+        let trait_name = simplify_type_name(trait_name);
+
+        if trait_name.is_empty() || target_name.is_empty() {
+            return;
+        }
+
+        if let Some(struct_row) = rows
+            .structs
+            .iter_mut()
+            .find(|row| row.file == rows.current_file && row.name == target_name)
+        {
+            struct_row.implements = merge_csv(&struct_row.implements, &trait_name);
+        }
+    }
+
     fn map_const_or_static(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
         let Some(name_node) = node.child_by_field_name("name") else { return };
         let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
@@ -233,46 +253,11 @@ impl LanguageAdapter for RustAdapter {
             "call_expression" => self.map_call(node, source, rows),
             "use_declaration" => self.map_import(node, source, rows),
             "struct_item" => self.map_struct(node, source, rows),
+            "impl_item" => self.map_impl_item(node, source, rows),
             "const_item" | "static_item" => self.map_const_or_static(node, source, rows),
             "let_declaration" => self.map_let(node, source, rows),
             "line_comment" | "block_comment" => self.map_comment(node, source, rows),
             _ => {}
-        }
-    }
-
-    fn second_pass(&self, batch: &mut TableBatch, root: &Path) {
-        let test_files = scan_test_files(root);
-
-        for function in &mut batch.functions {
-            let has_neighbor_test = function.file.ends_with(".rs")
-                && test_files.contains(&function.file.replace(".rs", "_test.rs"));
-            let has_same_file_test = test_files.contains(&function.file);
-            if has_neighbor_test || has_same_file_test {
-                function.has_test = true;
-            }
-        }
-
-        for comment in &mut batch.comments {
-            let nearest_function = batch
-                .functions
-                .iter()
-                .filter(|row| row.file == comment.file && row.line > comment.line)
-                .min_by_key(|row| row.line);
-            let nearest_struct = batch
-                .structs
-                .iter()
-                .filter(|row| row.file == comment.file && row.line > comment.line)
-                .min_by_key(|row| row.line);
-
-            comment.attached_to = match (nearest_function, nearest_struct) {
-                (Some(function), None) => function.name.clone(),
-                (None, Some(struct_row)) => struct_row.name.clone(),
-                (Some(function), Some(struct_row)) if function.line <= struct_row.line => {
-                    function.name.clone()
-                }
-                (_, Some(struct_row)) => struct_row.name.clone(),
-                _ => String::new(),
-            };
         }
     }
 }
@@ -292,29 +277,32 @@ fn find_enclosing_function<'a>(node: Node<'a>, source: &'a str) -> Option<&'a st
     }
 }
 
-fn scan_test_files(root: &Path) -> std::collections::HashSet<String> {
-    let mut test_files = std::collections::HashSet::new();
-    let mut dirs = vec![root.to_path_buf()];
+fn merge_csv(existing: &str, addition: &str) -> String {
+    let mut items = existing
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
 
-    while let Some(dir) = dirs.pop() {
-        let Ok(entries) = std::fs::read_dir(dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                dirs.push(path);
-                continue;
-            }
-
-            let Some(name) = path.file_name().and_then(|name| name.to_str()) else { continue };
-            let is_test_file = name.ends_with("_test.rs")
-                || path.components().any(|component| component.as_os_str() == "tests");
-            if is_test_file {
-                test_files.insert(name.to_string());
-            }
-        }
+    if !addition.trim().is_empty() && !items.iter().any(|item| item == addition.trim()) {
+        items.push(addition.trim().to_string());
     }
 
-    test_files
+    items.join(",")
+}
+
+fn simplify_type_name(value: &str) -> String {
+    value
+        .split("::")
+        .last()
+        .unwrap_or(value)
+        .split('<')
+        .next()
+        .unwrap_or(value)
+        .trim()
+        .trim_start_matches('&')
+        .to_string()
 }
 
 #[cfg(test)]
@@ -389,6 +377,23 @@ fn run() {
 
         assert_eq!(batch.comments.len(), 1);
         assert!(batch.comments[0].is_doc);
+    }
+
+    #[test]
+    fn maps_impl_traits_to_structs() {
+        let source = r#"
+trait Greeter {}
+
+pub struct User {}
+
+impl Greeter for User {}
+"#;
+
+        let batch = walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
+
+        assert_eq!(batch.structs.len(), 1);
+        assert_eq!(batch.structs[0].name, "User");
+        assert_eq!(batch.structs[0].implements, "Greeter");
     }
 
     #[test]

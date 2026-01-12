@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ql_ast::{
     CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
 };
@@ -71,46 +69,6 @@ impl LanguageAdapter for GoAdapter {
             "short_var_declaration" => self.map_short_var(node, source, rows),
             "comment" => self.map_comment(node, source, rows),
             _ => {}
-        }
-    }
-
-    fn second_pass(&self, batch: &mut TableBatch, root: &Path) {
-        let has_test_files = scan_test_files(root);
-
-        for fn_row in &mut batch.functions {
-            let test_file = fn_row.file.replace(".go", "_test.go");
-            if has_test_files.contains(&test_file) {
-                fn_row.has_test = true;
-            }
-        }
-
-        for comment in &mut batch.comments {
-            let text = comment.text.trim();
-            if (text.starts_with("// ") && text.chars().nth(3).is_some_and(|c| c.is_uppercase()))
-                || text.starts_with("/*")
-            {
-                comment.is_doc = true;
-            }
-            let nearest_fn = batch
-                .functions
-                .iter()
-                .filter(|f| f.file == comment.file && f.line > comment.line)
-                .min_by_key(|f| f.line);
-            let nearest_struct = batch
-                .structs
-                .iter()
-                .filter(|s| s.file == comment.file && s.line > comment.line)
-                .min_by_key(|s| s.line);
-            let nearest = match (nearest_fn, nearest_struct) {
-                (Some(f), None) => Some(f.name.as_str()),
-                (None, Some(s)) => Some(s.name.as_str()),
-                (Some(f), Some(s)) if f.line <= s.line => Some(f.name.as_str()),
-                (_, Some(s)) => Some(s.name.as_str()),
-                _ => None,
-            };
-            if let Some(name) = nearest {
-                comment.attached_to = name.to_string();
-            }
         }
     }
 }
@@ -364,27 +322,6 @@ fn find_enclosing_function<'a>(node: Node<'a>, source: &'a str) -> Option<&'a st
             }
         }
     }
-}
-
-fn scan_test_files(root: &Path) -> std::collections::HashSet<String> {
-    let mut test_files = std::collections::HashSet::new();
-    let mut dirs = vec![root.to_path_buf()];
-    while let Some(dir) = dirs.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                dirs.push(path);
-                continue;
-            }
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with("_test.go") {
-                    test_files.insert(name.to_string());
-                }
-            }
-        }
-    }
-    test_files
 }
 
 #[cfg(test)]

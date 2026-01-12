@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ql_ast::{
     CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
 };
@@ -314,55 +312,6 @@ impl LanguageAdapter for TypeScriptAdapter {
             _ => {}
         }
     }
-
-    fn second_pass(&self, batch: &mut TableBatch, root: &Path) {
-        let test_files = scan_test_files(root);
-
-        for function in &mut batch.functions {
-            let base = function
-                .file
-                .strip_suffix(".tsx")
-                .or_else(|| function.file.strip_suffix(".ts"))
-                .unwrap_or(function.file.as_str());
-            let candidates = [
-                format!("{base}.test.ts"),
-                format!("{base}.spec.ts"),
-                format!("{base}.test.tsx"),
-                format!("{base}.spec.tsx"),
-            ];
-            if candidates.iter().any(|candidate| test_files.contains(candidate)) {
-                function.has_test = true;
-            }
-        }
-
-        for comment in &mut batch.comments {
-            let text = comment.text.trim();
-            if text.starts_with("/**") || text.starts_with("/*!") {
-                comment.is_doc = true;
-            }
-
-            let nearest_fn = batch
-                .functions
-                .iter()
-                .filter(|f| f.file == comment.file && f.line > comment.line)
-                .min_by_key(|f| f.line);
-            let nearest_struct = batch
-                .structs
-                .iter()
-                .filter(|s| s.file == comment.file && s.line > comment.line)
-                .min_by_key(|s| s.line);
-            let nearest = match (nearest_fn, nearest_struct) {
-                (Some(f), None) => Some(f.name.as_str()),
-                (None, Some(s)) => Some(s.name.as_str()),
-                (Some(f), Some(s)) if f.line <= s.line => Some(f.name.as_str()),
-                (_, Some(s)) => Some(s.name.as_str()),
-                _ => None,
-            };
-            if let Some(name) = nearest {
-                comment.attached_to = name.to_string();
-            }
-        }
-    }
 }
 
 fn find_enclosing_function<'a>(node: Node<'a>, source: &'a str) -> Option<&'a str> {
@@ -378,33 +327,6 @@ fn find_enclosing_function<'a>(node: Node<'a>, source: &'a str) -> Option<&'a st
             _ => current = current.parent()?,
         }
     }
-}
-
-fn scan_test_files(root: &Path) -> std::collections::HashSet<String> {
-    let mut test_files = std::collections::HashSet::new();
-    let mut dirs = vec![root.to_path_buf()];
-
-    while let Some(dir) = dirs.pop() {
-        let Ok(entries) = std::fs::read_dir(dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                dirs.push(path);
-                continue;
-            }
-
-            let Some(name) = path.file_name().and_then(|name| name.to_str()) else { continue };
-            if name.ends_with(".test.ts")
-                || name.ends_with(".spec.ts")
-                || name.ends_with(".test.tsx")
-                || name.ends_with(".spec.tsx")
-            {
-                test_files.insert(name.to_string());
-            }
-        }
-    }
-
-    test_files
 }
 
 #[cfg(test)]

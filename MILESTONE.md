@@ -12,7 +12,7 @@
 
 ## Phase 3 — Adapters
 - [x] Go adapter complete (all tables, complexity, second-pass)
-- [ ] Second-pass analysis (`has_test`, `implements`, `attached_to`)
+- [x] Second-pass analysis (`has_test`, `implements`, `attached_to`)
 - [x] Rust adapter
 - [x] TypeScript adapter
 - [x] Python adapter
