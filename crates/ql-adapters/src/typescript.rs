@@ -201,8 +201,35 @@ impl TypeScriptAdapter {
             name: name.to_string(),
             field_count,
             visibility: Self::is_public(name, node, source),
-            implements: String::new(),
+            implements: Self::implements(node, source),
         });
+    }
+
+    fn implements(node: Node<'_>, source: &str) -> String {
+        let mut cursor = node.walk();
+        let Some(heritage) = node
+            .named_children(&mut cursor)
+            .find(|child| child.kind() == "class_heritage")
+        else {
+            return String::new();
+        };
+
+        let mut cursor = heritage.walk();
+        let Some(implements_clause) = heritage
+            .named_children(&mut cursor)
+            .find(|child| child.kind() == "implements_clause")
+        else {
+            return String::new();
+        };
+
+        let mut names = Vec::new();
+        let mut cursor = implements_clause.walk();
+        for child in implements_clause.named_children(&mut cursor) {
+            if let Ok(name) = child.utf8_text(source.as_bytes()) {
+                names.push(name.to_string());
+            }
+        }
+        names.join(",")
     }
 
     fn map_variable(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
@@ -391,7 +418,7 @@ mod tests {
         let source = r#"
 import { readFileSync as readFile } from "fs";
 
-class Person {
+class Person implements Greeter, Serializable {
   name: string;
   greet(message: string): string {
     return message;
@@ -413,6 +440,7 @@ const answer: number = 42;
         assert_eq!(batch.imports.len(), 1);
         assert_eq!(batch.imports[0].module, "fs");
         assert_eq!(batch.structs.len(), 1);
+        assert_eq!(batch.structs[0].implements, "Greeter,Serializable");
         assert_eq!(batch.variables.len(), 1);
     }
 }

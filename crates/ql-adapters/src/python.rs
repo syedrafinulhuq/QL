@@ -99,8 +99,23 @@ impl PythonAdapter {
             name: name.to_string(),
             field_count,
             visibility: Self::is_private(name),
-            implements: String::new(),
+            implements: Self::implements(node, source),
         });
+    }
+
+    fn implements(node: Node<'_>, source: &str) -> String {
+        let Some(superclasses) = node.child_by_field_name("superclasses") else {
+            return String::new();
+        };
+
+        let mut names = Vec::new();
+        let mut cursor = superclasses.walk();
+        for child in superclasses.named_children(&mut cursor) {
+            if let Ok(name) = child.utf8_text(source.as_bytes()) {
+                names.push(name.to_string());
+            }
+        }
+        names.join(",")
     }
 
     fn map_call(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
@@ -311,7 +326,7 @@ mod tests {
         let source = r#"
 import os
 
-class User:
+class User(BaseUser, Serializable):
     def greet(self, message):
         return message
 
@@ -328,6 +343,7 @@ x = 1
         assert_eq!(batch.functions[1].name, "add");
         assert_eq!(batch.imports.len(), 1);
         assert_eq!(batch.structs.len(), 1);
+        assert_eq!(batch.structs[0].implements, "BaseUser,Serializable");
         assert_eq!(batch.variables.len(), 1);
     }
 }
