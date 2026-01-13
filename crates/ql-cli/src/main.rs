@@ -71,15 +71,15 @@ fn main() {
         PathBuf::from(".")
     };
 
-    let root = root.canonicalize().unwrap_or_else(|e| {
-        eprintln!("error: {e}");
-        process::exit(1);
-    });
-
     if !root.exists() {
         eprintln!("error: path \"{}\" does not exist", root.display());
         process::exit(1);
     }
+
+    let root = root.canonicalize().unwrap_or_else(|e| {
+        eprintln!("error: {e}");
+        process::exit(1);
+    });
 
     if watch {
         if let Err(e) = run_watch(query, &root, &format) {

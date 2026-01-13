@@ -24,6 +24,6 @@
 
 ## Phase 5 — Polish
 - [x] Output formats: table, JSON, CSV
-- [ ] Error messages reviewed and consistent
+- [x] Error messages reviewed and consistent
 - [ ] README with install instructions and 10 example queries
 - [ ] Cross-platform test on macOS

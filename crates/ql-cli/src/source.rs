@@ -54,8 +54,11 @@ pub fn scan_snapshot(root: &Path) -> Result<HashMap<String, SystemTime>, String>
         if !is_source_file(&path) {
             continue;
         }
-        let metadata = std::fs::metadata(&path).map_err(|e| format!("error: {e}"))?;
-        let modified = metadata.modified().map_err(|e| format!("error: {e}"))?;
+        let metadata = std::fs::metadata(&path)
+            .map_err(|e| format!("error: failed to stat {}: {e}", path.display()))?;
+        let modified = metadata
+            .modified()
+            .map_err(|e| format!("error: failed to read mtime for {}: {e}", path.display()))?;
         snapshot.insert(relative, modified);
     }
     Ok(snapshot)
@@ -95,8 +98,17 @@ pub fn collect_source_batch(root: &Path) -> Result<TableBatch, String> {
     for (path, relative) in walk_relative_files(root) {
         let Some(adapter) = adapter_for_path(&path) else {
             let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-            if warned_exts.insert(ext.to_string()) {
-                eprintln!("warning: no adapter for .{ext}, skipping");
+            let warning_key = if ext.is_empty() {
+                "<no-extension>".to_string()
+            } else {
+                format!(".{ext}")
+            };
+            if warned_exts.insert(warning_key.clone()) {
+                if ext.is_empty() {
+                    eprintln!("warning: no adapter for files without an extension, skipping");
+                } else {
+                    eprintln!("warning: no adapter for .{ext}, skipping");
+                }
             }
             continue;
         };
