@@ -1,5 +1,6 @@
 use ql_ast::{
-    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
+    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch,
+    VariableRow,
 };
 use tree_sitter::Node;
 
@@ -26,9 +27,8 @@ impl GoAdapter {
         let mut stack = vec![node];
         while let Some(current) = stack.pop() {
             match current.kind() {
-                "if_statement" | "for_statement" | "range_clause"
-                | "switch_statement" | "select_statement" | "case_clause"
-                | "go_statement" => score += 1,
+                "if_statement" | "for_statement" | "range_clause" | "switch_statement"
+                | "select_statement" | "case_clause" | "go_statement" => score += 1,
                 _ => {}
             }
             let mut child_cursor = current.walk();
@@ -75,8 +75,12 @@ impl LanguageAdapter for GoAdapter {
 
 impl GoAdapter {
     fn map_function(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let params = node.child_by_field_name("parameters");
         let param_count = params.map(|p| Self::count_params(p, source)).unwrap_or(0);
@@ -107,8 +111,12 @@ impl GoAdapter {
     }
 
     fn map_method(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let params = node.child_by_field_name("parameters");
         let param_count = params.map(|p| Self::count_params(p, source)).unwrap_or(0);
@@ -139,8 +147,12 @@ impl GoAdapter {
     }
 
     fn map_call(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(func_node) = node.child_by_field_name("function") else { return };
-        let Ok(callee) = func_node.utf8_text(source.as_bytes()) else { return };
+        let Some(func_node) = node.child_by_field_name("function") else {
+            return;
+        };
+        let Ok(callee) = func_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let caller = find_enclosing_function(node, source).unwrap_or("");
         let is_external = callee.contains('.');
@@ -198,8 +210,12 @@ impl GoAdapter {
             if child.kind() != "type_spec" {
                 continue;
             }
-            let Some(name_node) = child.child_by_field_name("name") else { continue };
-            let Ok(name) = name_node.utf8_text(source.as_bytes()) else { continue };
+            let Some(name_node) = child.child_by_field_name("name") else {
+                continue;
+            };
+            let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+                continue;
+            };
 
             let type_node = child.child_by_field_name("type");
             let is_struct = type_node.is_some_and(|t| t.kind() == "struct_type");
@@ -211,12 +227,10 @@ impl GoAdapter {
             let field_count = type_node
                 .and_then(|t| {
                     let mut field_cursor = t.walk();
-                    let field_list = t
-                        .child_by_field_name("body")
-                        .or_else(|| {
-                            t.children(&mut field_cursor)
-                                .find(|c| c.kind() == "field_declaration_list")
-                        });
+                    let field_list = t.child_by_field_name("body").or_else(|| {
+                        t.children(&mut field_cursor)
+                            .find(|c| c.kind() == "field_declaration_list")
+                    });
                     field_list.map(|fl| {
                         let mut fc = fl.walk();
                         fl.children(&mut fc)
@@ -248,8 +262,12 @@ impl GoAdapter {
             if child.kind() != "var_spec" {
                 continue;
             }
-            let Some(name_node) = child.child_by_field_name("name") else { continue };
-            let Ok(name) = name_node.utf8_text(source.as_bytes()) else { continue };
+            let Some(name_node) = child.child_by_field_name("name") else {
+                continue;
+            };
+            let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+                continue;
+            };
 
             let type_hint = child
                 .child_by_field_name("type")
@@ -276,8 +294,12 @@ impl GoAdapter {
     }
 
     fn map_short_var(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(left_node) = node.child_by_field_name("left") else { return };
-        let Ok(name) = left_node.utf8_text(source.as_bytes()) else { return };
+        let Some(left_node) = node.child_by_field_name("left") else {
+            return;
+        };
+        let Ok(name) = left_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         rows.variables.push(VariableRow {
             file: rows.current_file.clone(),
@@ -290,7 +312,9 @@ impl GoAdapter {
     }
 
     fn map_comment(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Ok(text) = node.utf8_text(source.as_bytes()) else { return };
+        let Ok(text) = node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let trimmed = text.trim();
 
         let is_doc = (trimmed.starts_with("// ")

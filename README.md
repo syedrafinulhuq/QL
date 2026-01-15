@@ -4,6 +4,22 @@
 
 It parses source files with Tree-sitter, maps syntax into language-agnostic tables, loads rows into DuckDB, and runs SQL against those tables. Goal: deterministic code search and analysis without AI, embeddings, or fuzzy guesses.
 
+## Install
+
+From a checkout:
+
+```bash
+cargo build --release
+./target/release/ql --langs
+```
+
+Or install the binary locally:
+
+```bash
+cargo install --path crates/ql-cli
+ql --langs
+```
+
 ## Example
 
 ```bash
@@ -25,6 +41,70 @@ Language adapters populate the shared schema:
 - `comments`
 
 Schema source lives in [schema/tables.json](schema/tables.json).
+
+## Example Queries
+
+All examples assume you run them from a repository root or pass an explicit path as the final argument.
+
+1. Find non-test functions with higher complexity.
+
+```bash
+ql "SELECT name, file, line, complexity FROM functions WHERE has_test = false AND complexity > 10 ORDER BY complexity DESC" .
+```
+
+2. List all external calls.
+
+```bash
+ql "SELECT caller, callee, file, line FROM calls WHERE is_external = true ORDER BY file, line" .
+```
+
+3. Inspect imports from the standard library.
+
+```bash
+ql "SELECT module, alias, file, line FROM imports WHERE is_std = true ORDER BY file, line" .
+```
+
+4. Find public structs and their implemented interfaces.
+
+```bash
+ql "SELECT name, visibility, implements, file, line FROM structs WHERE visibility = 'public' ORDER BY file, line" .
+```
+
+5. List mutable variables.
+
+```bash
+ql "SELECT name, type_hint, scope, file, line FROM variables WHERE is_mutated = true ORDER BY file, line" .
+```
+
+6. Show doc comments attached to code.
+
+```bash
+ql "SELECT text, attached_to, file, line FROM comments WHERE is_doc = true AND attached_to IS NOT NULL ORDER BY file, line" .
+```
+
+7. Find functions that mention tests.
+
+```bash
+ql "SELECT name, file, line FROM functions WHERE has_test = true ORDER BY file, line" .
+```
+
+8. Show functions that return results.
+
+```bash
+ql "SELECT name, return_type, file, line FROM functions WHERE return_type LIKE '%Result%' ORDER BY file, line" .
+```
+
+9. Render the same data as JSON.
+
+```bash
+ql --format json "SELECT name, file, line FROM structs ORDER BY file, line LIMIT 20" .
+```
+
+10. Render a compact CSV export.
+
+```bash
+ql --format csv "SELECT name, file, line FROM functions ORDER BY file, line LIMIT 50" .
+```
 
 ## Architecture
 

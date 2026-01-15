@@ -3,6 +3,8 @@ use std::io::Write;
 use ql_adapters::supported_languages as adapter_supported_languages;
 use ql_core::protocol::QueryResult;
 
+const MAX_CELL_WIDTH: usize = 60;
+
 pub fn validate_format(format: &str) -> Result<(), String> {
     match format {
         "table" | "json" | "csv" => Ok(()),
@@ -70,12 +72,35 @@ fn format_csv(writer: &mut impl Write, result: &QueryResult) -> Result<(), Strin
     write!(writer, "{csv}").map_err(|e| e.to_string())
 }
 
-fn cell_text(value: &serde_json::Value) -> String {
-    match value {
+fn display_cell(value: &serde_json::Value) -> String {
+    let text = match value {
         serde_json::Value::String(s) => s.clone(),
         serde_json::Value::Null => String::new(),
         other => other.to_string(),
+    };
+
+    let mut chars = text.chars();
+    let mut shortened: String = chars.by_ref().take(MAX_CELL_WIDTH).collect();
+    if chars.next().is_some() {
+        shortened.truncate(MAX_CELL_WIDTH.saturating_sub(3));
+        shortened.push_str("...");
     }
+
+    shortened
+}
+
+fn numeric_column(result: &QueryResult, index: usize) -> bool {
+    let mut has_number = false;
+
+    for row in &result.rows {
+        match row.get(index) {
+            Some(serde_json::Value::Null) => {}
+            Some(serde_json::Value::Number(_)) => has_number = true,
+            Some(_) | None => return false,
+        }
+    }
+
+    has_number
 }
 
 fn format_table(writer: &mut impl Write, result: &QueryResult) -> Result<(), String> {
@@ -83,13 +108,15 @@ fn format_table(writer: &mut impl Write, result: &QueryResult) -> Result<(), Str
         return Ok(());
     }
 
-    let mut widths: Vec<usize> = result.columns.iter().map(|c| c.len()).collect();
+    let mut widths: Vec<usize> = result.columns.iter().map(|column| column.len()).collect();
+    let numeric = (0..result.columns.len())
+        .map(|index| numeric_column(result, index))
+        .collect::<Vec<_>>();
+
     for row in &result.rows {
-        for (i, value) in row.iter().enumerate() {
-            let cell = cell_text(value);
-            if cell.len() > widths[i] {
-                widths[i] = cell.len();
-            }
+        for (index, value) in row.iter().enumerate() {
+            let cell = display_cell(value);
+            widths[index] = widths[index].max(cell.len());
         }
     }
 
@@ -111,8 +138,13 @@ fn format_table(writer: &mut impl Write, result: &QueryResult) -> Result<(), Str
 
     for row in &result.rows {
         for (i, value) in row.iter().enumerate() {
-            write!(writer, "{:<width$}", cell_text(value), width = widths[i])
-                .map_err(|e| e.to_string())?;
+            let cell = display_cell(value);
+            if numeric[i] {
+                write!(writer, "{:>width$}", cell, width = widths[i])
+            } else {
+                write!(writer, "{:<width$}", cell, width = widths[i])
+            }
+            .map_err(|e| e.to_string())?;
             if i < row.len() - 1 {
                 write!(writer, "  ").map_err(|e| e.to_string())?;
             }
@@ -154,18 +186,29 @@ mod tests {
         let mut output = Vec::new();
         format_response(&mut output, "table", &result).expect("format should succeed");
 
-        let expected = "name  line\n----  ----\nmain  4   \nadd   12  \n";
+        let expected = "name  line\n----  ----\nmain     4\nadd     12\n";
         assert_eq!(String::from_utf8(output).unwrap(), expected);
+    }
+
+    #[test]
+    fn truncates_long_cells() {
+        let result = QueryResult {
+            columns: vec!["description".to_string()],
+            rows: vec![vec![Value::String("a".repeat(70))]],
+        };
+
+        let mut output = Vec::new();
+        format_response(&mut output, "table", &result).expect("format should succeed");
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains(&format!("{}...", "a".repeat(57))));
     }
 
     #[test]
     fn formats_json_output() {
         let result = QueryResult {
             columns: vec!["name".to_string(), "line".to_string()],
-            rows: vec![vec![
-                Value::String("main".to_string()),
-                Value::from(4),
-            ]],
+            rows: vec![vec![Value::String("main".to_string()), Value::from(4)]],
         };
 
         let mut output = Vec::new();
@@ -179,10 +222,7 @@ mod tests {
     fn formats_csv_output() {
         let result = QueryResult {
             columns: vec!["name".to_string(), "line".to_string()],
-            rows: vec![vec![
-                Value::String("main".to_string()),
-                Value::from(4),
-            ]],
+            rows: vec![vec![Value::String("main".to_string()), Value::from(4)]],
         };
 
         let mut output = Vec::new();

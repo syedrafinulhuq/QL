@@ -1,10 +1,10 @@
-use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ql_adapters::adapter_for_path;
-use ql_ast::{second_pass, walk_source, TableBatch};
+use ql_ast::{TableBatch, second_pass, walk_source};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

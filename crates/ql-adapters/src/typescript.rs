@@ -1,5 +1,6 @@
 use ql_ast::{
-    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
+    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch,
+    VariableRow,
 };
 use tree_sitter::Node;
 
@@ -13,7 +14,9 @@ impl TypeScriptAdapter {
             if child.kind() != "accessibility_modifier" {
                 continue;
             }
-            let Ok(text) = child.utf8_text(source.as_bytes()) else { continue };
+            let Ok(text) = child.utf8_text(source.as_bytes()) else {
+                continue;
+            };
             match text.trim() {
                 "private" => return "private".to_string(),
                 "protected" => visibility = "internal",
@@ -80,8 +83,12 @@ impl TypeScriptAdapter {
     }
 
     fn map_function(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let params = node
             .child_by_field_name("parameters")
@@ -109,8 +116,12 @@ impl TypeScriptAdapter {
     }
 
     fn map_method(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let params = node
             .child_by_field_name("parameters")
@@ -138,8 +149,12 @@ impl TypeScriptAdapter {
     }
 
     fn map_call(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(func_node) = node.child_by_field_name("function") else { return };
-        let Ok(callee) = func_node.utf8_text(source.as_bytes()) else { return };
+        let Some(func_node) = node.child_by_field_name("function") else {
+            return;
+        };
+        let Ok(callee) = func_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let caller = find_enclosing_function(node, source).unwrap_or("");
 
         rows.calls.push(CallRow {
@@ -165,8 +180,19 @@ impl TypeScriptAdapter {
         };
         let is_std = matches!(
             module.as_str(),
-            "fs" | "path" | "url" | "util" | "os" | "crypto" | "events" | "stream"
-                | "buffer" | "assert" | "http" | "https" | "tty" | "net"
+            "fs" | "path"
+                | "url"
+                | "util"
+                | "os"
+                | "crypto"
+                | "events"
+                | "stream"
+                | "buffer"
+                | "assert"
+                | "http"
+                | "https"
+                | "tty"
+                | "net"
         ) || module.starts_with("node:");
 
         rows.imports.push(ImportRow {
@@ -179,16 +205,25 @@ impl TypeScriptAdapter {
     }
 
     fn map_class(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
-        let Some(body) = node.child_by_field_name("body") else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
+        let Some(body) = node.child_by_field_name("body") else {
+            return;
+        };
 
         let mut field_count = 0;
         let mut cursor = body.walk();
         for child in body.children(&mut cursor) {
             match child.kind() {
-                "method_definition" | "public_field_definition" | "property_signature"
-                | "public_method_definition" | "index_signature" => field_count += 1,
+                "method_definition"
+                | "public_field_definition"
+                | "property_signature"
+                | "public_method_definition"
+                | "index_signature" => field_count += 1,
                 _ => {}
             }
         }
@@ -238,8 +273,12 @@ impl TypeScriptAdapter {
                 continue;
             }
 
-            let Some(name_node) = child.child_by_field_name("name") else { continue };
-            let Ok(name) = name_node.utf8_text(source.as_bytes()) else { continue };
+            let Some(name_node) = child.child_by_field_name("name") else {
+                continue;
+            };
+            let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+                continue;
+            };
             let type_hint = child
                 .child_by_field_name("type")
                 .and_then(|ty| ty.utf8_text(source.as_bytes()).ok())
@@ -272,9 +311,12 @@ impl TypeScriptAdapter {
     }
 
     fn map_comment(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Ok(text) = node.utf8_text(source.as_bytes()) else { return };
+        let Ok(text) = node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let trimmed = text.trim();
-        let is_doc = trimmed.starts_with("/**") || trimmed.starts_with("///") || trimmed.starts_with("/*!");
+        let is_doc =
+            trimmed.starts_with("/**") || trimmed.starts_with("///") || trimmed.starts_with("/*!");
 
         rows.comments.push(CommentRow {
             file: rows.current_file.clone(),
@@ -284,7 +326,6 @@ impl TypeScriptAdapter {
             is_doc,
         });
     }
-
 }
 
 impl LanguageAdapter for TypeScriptAdapter {
@@ -306,7 +347,9 @@ impl LanguageAdapter for TypeScriptAdapter {
             "method_definition" => self.map_method(node, source, rows),
             "call_expression" => self.map_call(node, source, rows),
             "import_statement" => self.map_import(node, source, rows),
-            "class_declaration" | "abstract_class_declaration" => self.map_class(node, source, rows),
+            "class_declaration" | "abstract_class_declaration" => {
+                self.map_class(node, source, rows)
+            }
             "lexical_declaration" | "variable_declaration" => self.map_variable(node, source, rows),
             "comment" => self.map_comment(node, source, rows),
             _ => {}
@@ -354,7 +397,8 @@ function add(a: number, b: number): number {
 const answer: number = 42;
 "#;
 
-        let batch = walk_source(&TypeScriptAdapter, "main.ts", source).expect("typescript grammar should parse");
+        let batch = walk_source(&TypeScriptAdapter, "main.ts", source)
+            .expect("typescript grammar should parse");
 
         assert_eq!(batch.functions.len(), 2);
         assert_eq!(batch.functions[0].name, "greet");

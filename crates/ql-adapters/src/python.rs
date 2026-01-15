@@ -1,5 +1,6 @@
 use ql_ast::{
-    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
+    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch,
+    VariableRow,
 };
 use tree_sitter::Node;
 
@@ -19,8 +20,11 @@ impl PythonAdapter {
         let mut cursor = parameters_node.walk();
         for child in parameters_node.children(&mut cursor) {
             match child.kind() {
-                "identifier" | "typed_parameter" | "default_parameter"
-                | "list_splat_pattern" | "dictionary_splat_pattern" => count += 1,
+                "identifier"
+                | "typed_parameter"
+                | "default_parameter"
+                | "list_splat_pattern"
+                | "dictionary_splat_pattern" => count += 1,
                 _ => {}
             }
         }
@@ -32,8 +36,8 @@ impl PythonAdapter {
         let mut stack = vec![node];
         while let Some(current) = stack.pop() {
             match current.kind() {
-                "if_statement" | "for_statement" | "while_statement"
-                | "match_case" | "except_clause" | "elif_clause" => score += 1,
+                "if_statement" | "for_statement" | "while_statement" | "match_case"
+                | "except_clause" | "elif_clause" => score += 1,
                 "boolean_operator" => score += 1,
                 _ => {}
             }
@@ -52,8 +56,12 @@ impl PythonAdapter {
     }
 
     fn map_function(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let params = node
             .child_by_field_name("parameters")
@@ -78,9 +86,15 @@ impl PythonAdapter {
     }
 
     fn map_class(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
-        let Some(body) = node.child_by_field_name("body") else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
+        let Some(body) = node.child_by_field_name("body") else {
+            return;
+        };
 
         let mut field_count = 0;
         let mut cursor = body.walk();
@@ -117,8 +131,12 @@ impl PythonAdapter {
     }
 
     fn map_call(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(function_node) = node.child_by_field_name("function") else { return };
-        let Ok(callee) = function_node.utf8_text(source.as_bytes()) else { return };
+        let Some(function_node) = node.child_by_field_name("function") else {
+            return;
+        };
+        let Ok(callee) = function_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let caller = find_enclosing_function(node, source).unwrap_or("");
 
         rows.calls.push(CallRow {
@@ -147,8 +165,19 @@ impl PythonAdapter {
         };
         let is_std = matches!(
             module.as_str(),
-            "os" | "sys" | "re" | "math" | "json" | "pathlib" | "typing" | "collections"
-                | "itertools" | "functools" | "datetime" | "subprocess" | "threading" | "asyncio"
+            "os" | "sys"
+                | "re"
+                | "math"
+                | "json"
+                | "pathlib"
+                | "typing"
+                | "collections"
+                | "itertools"
+                | "functools"
+                | "datetime"
+                | "subprocess"
+                | "threading"
+                | "asyncio"
         );
 
         rows.imports.push(ImportRow {
@@ -161,8 +190,12 @@ impl PythonAdapter {
     }
 
     fn map_assignment(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(left) = node.child_by_field_name("left") else { return };
-        let Ok(name) = left.utf8_text(source.as_bytes()) else { return };
+        let Some(left) = node.child_by_field_name("left") else {
+            return;
+        };
+        let Ok(name) = left.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let scope = if node.parent().is_some_and(|p| p.kind() == "module") {
             "module"
@@ -182,7 +215,9 @@ impl PythonAdapter {
     }
 
     fn map_comment(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Ok(text) = node.utf8_text(source.as_bytes()) else { return };
+        let Ok(text) = node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let trimmed = text.trim();
         let is_doc = trimmed.starts_with("#:") || trimmed.starts_with("#.");
 
@@ -194,7 +229,6 @@ impl PythonAdapter {
             is_doc,
         });
     }
-
 }
 
 impl LanguageAdapter for PythonAdapter {
@@ -259,7 +293,8 @@ def add(a, b):
 x = 1
 "#;
 
-        let batch = walk_source(&PythonAdapter, "main.py", source).expect("python grammar should parse");
+        let batch =
+            walk_source(&PythonAdapter, "main.py", source).expect("python grammar should parse");
 
         assert_eq!(batch.functions.len(), 2);
         assert_eq!(batch.functions[0].name, "greet");

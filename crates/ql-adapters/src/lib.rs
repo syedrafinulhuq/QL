@@ -25,15 +25,23 @@ pub fn adapters() -> &'static [&'static dyn LanguageAdapter] {
 pub fn adapter_for_path(path: &Path) -> Option<&'static dyn LanguageAdapter> {
     let ext = path.extension()?.to_str()?;
     let ext = format!(".{ext}");
-    adapters()
-        .iter()
-        .copied()
-        .find(|adapter| adapter.extensions().iter().any(|candidate| *candidate == ext))
+    adapters().iter().copied().find(|adapter| {
+        adapter
+            .extensions()
+            .iter()
+            .any(|candidate| *candidate == ext)
+    })
 }
 
 pub fn supported_languages() -> Vec<String> {
     adapters()
         .iter()
-        .map(|adapter| format!("{} ({})", adapter.language_name(), adapter.extensions().join(", ")))
+        .map(|adapter| {
+            format!(
+                "{} ({})",
+                adapter.language_name(),
+                adapter.extensions().join(", ")
+            )
+        })
         .collect()
 }

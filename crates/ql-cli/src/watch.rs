@@ -11,7 +11,10 @@ use crate::source::{collect_source_batch, detect_languages, scan_snapshot, snaps
 pub fn run_watch(query: &str, root: &Path, format: &str) -> Result<(), String> {
     let detected = detect_languages(root);
     if detected.is_empty() {
-        eprintln!("warning: no supported source files found in {}", root.display());
+        eprintln!(
+            "warning: no supported source files found in {}",
+            root.display()
+        );
     }
 
     let snapshot = scan_snapshot(root)?;

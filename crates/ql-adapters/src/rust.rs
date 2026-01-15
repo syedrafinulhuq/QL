@@ -1,5 +1,6 @@
 use ql_ast::{
-    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch, VariableRow,
+    CallRow, CommentRow, FunctionRow, ImportRow, LanguageAdapter, StructRow, TableBatch,
+    VariableRow,
 };
 use tree_sitter::Node;
 
@@ -48,8 +49,12 @@ impl RustAdapter {
     }
 
     fn map_function(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let param_count = node
             .child_by_field_name("parameters")
@@ -82,8 +87,12 @@ impl RustAdapter {
     }
 
     fn map_call(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(function_node) = node.child_by_field_name("function") else { return };
-        let Ok(callee) = function_node.utf8_text(source.as_bytes()) else { return };
+        let Some(function_node) = node.child_by_field_name("function") else {
+            return;
+        };
+        let Ok(callee) = function_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let caller = find_enclosing_function(node, source).unwrap_or("");
 
         rows.calls.push(CallRow {
@@ -96,8 +105,13 @@ impl RustAdapter {
     }
 
     fn map_import(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Ok(module) = node.utf8_text(source.as_bytes()) else { return };
-        let module = module.trim_start_matches("use").trim().trim_end_matches(';');
+        let Ok(module) = node.utf8_text(source.as_bytes()) else {
+            return;
+        };
+        let module = module
+            .trim_start_matches("use")
+            .trim()
+            .trim_end_matches(';');
         if module.is_empty() {
             return;
         }
@@ -129,8 +143,12 @@ impl RustAdapter {
     }
 
     fn map_struct(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let field_count = node
             .child_by_field_name("body")
@@ -157,10 +175,18 @@ impl RustAdapter {
     }
 
     fn map_impl_item(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(target_node) = node.child_by_field_name("type") else { return };
-        let Ok(target_name) = target_node.utf8_text(source.as_bytes()) else { return };
-        let Some(trait_node) = node.child_by_field_name("trait") else { return };
-        let Ok(trait_name) = trait_node.utf8_text(source.as_bytes()) else { return };
+        let Some(target_node) = node.child_by_field_name("type") else {
+            return;
+        };
+        let Ok(target_name) = target_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
+        let Some(trait_node) = node.child_by_field_name("trait") else {
+            return;
+        };
+        let Ok(trait_name) = trait_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
 
         let target_name = simplify_type_name(target_name);
         let trait_name = simplify_type_name(trait_name);
@@ -179,8 +205,12 @@ impl RustAdapter {
     }
 
     fn map_const_or_static(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(name_node) = node.child_by_field_name("name") else { return };
-        let Ok(name) = name_node.utf8_text(source.as_bytes()) else { return };
+        let Some(name_node) = node.child_by_field_name("name") else {
+            return;
+        };
+        let Ok(name) = name_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let type_hint = node
             .child_by_field_name("type")
             .and_then(|ty| ty.utf8_text(source.as_bytes()).ok())
@@ -198,8 +228,12 @@ impl RustAdapter {
     }
 
     fn map_let(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Some(pattern_node) = node.child_by_field_name("pattern") else { return };
-        let Ok(name) = pattern_node.utf8_text(source.as_bytes()) else { return };
+        let Some(pattern_node) = node.child_by_field_name("pattern") else {
+            return;
+        };
+        let Ok(name) = pattern_node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let type_hint = node
             .child_by_field_name("type")
             .and_then(|ty| ty.utf8_text(source.as_bytes()).ok())
@@ -220,9 +254,12 @@ impl RustAdapter {
     }
 
     fn map_comment(&self, node: Node<'_>, source: &str, rows: &mut TableBatch) {
-        let Ok(text) = node.utf8_text(source.as_bytes()) else { return };
+        let Ok(text) = node.utf8_text(source.as_bytes()) else {
+            return;
+        };
         let trimmed = text.trim();
-        let is_doc = trimmed.starts_with("///") || trimmed.starts_with("//!") || trimmed.starts_with("/**");
+        let is_doc =
+            trimmed.starts_with("///") || trimmed.starts_with("//!") || trimmed.starts_with("/**");
 
         rows.comments.push(CommentRow {
             file: rows.current_file.clone(),
@@ -321,7 +358,8 @@ pub fn add(a: i32, b: i32) -> i32 {
 }
 "#;
 
-        let batch = walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
+        let batch =
+            walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
 
         assert_eq!(batch.functions.len(), 2);
         assert_eq!(batch.functions[0].name, "main");
@@ -352,7 +390,8 @@ fn run() {
 }
 "#;
 
-        let batch = walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
+        let batch =
+            walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
 
         assert_eq!(batch.imports.len(), 1);
         assert_eq!(batch.imports[0].module, "std::fmt");
@@ -389,7 +428,8 @@ pub struct User {}
 impl Greeter for User {}
 "#;
 
-        let batch = walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
+        let batch =
+            walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
 
         assert_eq!(batch.structs.len(), 1);
         assert_eq!(batch.structs[0].name, "User");
@@ -414,7 +454,8 @@ fn complex(n: i32) -> i32 {
 }
 "#;
 
-        let batch = walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
+        let batch =
+            walk_source(&RustAdapter, "main.rs", source).expect("rust grammar should parse");
 
         assert_eq!(batch.functions.len(), 1);
         assert_eq!(batch.functions[0].complexity, 4);

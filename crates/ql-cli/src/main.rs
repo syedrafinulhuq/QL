@@ -92,7 +92,10 @@ fn main() {
     // Detect languages present before engine call
     let detected = detect_languages(&root);
     if detected.is_empty() {
-        eprintln!("warning: no supported source files found in {}", root.display());
+        eprintln!(
+            "warning: no supported source files found in {}",
+            root.display()
+        );
     }
 
     let statement = parse_query(query).unwrap_or_else(|e| {
