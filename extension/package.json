@@ -40,7 +40,8 @@
       "ql": [
         {
           "id": "ql.resultsView",
-          "name": "Query Results"
+          "name": "Query Results",
+          "type": "webview"
         }
       ]
     }
