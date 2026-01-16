@@ -4,6 +4,11 @@
   "version": "0.0.1",
   "publisher": "itsfuad",
   "description": "VS Code extension for querying codebases with ql",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itsfuad/ql.git"
+  },
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -44,9 +49,12 @@
     "compile": "tsc -p .",
     "watch": "tsc -w -p .",
     "vscode:prepublish": "npm run compile",
-    "lint": "tsc -p . --noEmit"
+    "lint": "tsc -p . --noEmit",
+    "package": "npm run compile && vsce package --no-dependencies",
+    "package:vsix": "npm run compile && vsce package --no-dependencies --out ql.vsix"
   },
   "devDependencies": {
+    "@vscode/vsce": "3.9.2",
     "@types/node": "25.9.3",
     "@types/vscode": "1.120.0",
     "typescript": "6.0.3"

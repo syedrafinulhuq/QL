@@ -1,6 +1,7 @@
 /target/
 /extension/out/
 /extension/node_modules/
+/extension/*.vsix
 /milestone.md
 /project.md
 
