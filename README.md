@@ -141,3 +141,9 @@ cargo build --bin ql
 ## Scope
 
 v1 targets Linux and macOS. No AI, no remote repositories, no type-resolution-heavy semantic analysis, no plugin system.
+
+## TODO
+ - [ ] add *.ext search in query
+ - [ ] add line:col in table in cmd
+ - [ ] better UI
+ - [ ] cross-platform
